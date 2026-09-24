@@ -98,7 +98,11 @@ export async function followUpDiscordInteraction(
 /**
  * Discord Interactions Webhook Handler
  */
-export async function handleDiscordInteractions(req: Request, res: Response): Promise<void> {
+ export async function handleDiscordInteractions(
+  req: Request,
+  res: Response,
+  options: { skipSignatureVerification?: boolean } = {}
+): Promise<void> {
   const db = await getDb();
 
   // Retrieve Discord configuration
@@ -120,17 +124,24 @@ export async function handleDiscordInteractions(req: Request, res: Response): Pr
   }
 
   // 1-4: Reject invalid or unsigned requests
-  if (!signature || !timestamp || !publicKey) {
-    logger.warn('Rejected Discord interaction: missing signature, timestamp, or public key');
-    res.status(401).send('Invalid signature or missing verification headers');
-    return;
-  }
+   // Public Discord requests must pass Ed25519 verification.
+  // The authenticated dashboard simulator may explicitly bypass this
+  // verification because it is generating a synthetic interaction.
+  if (!options.skipSignatureVerification) {
+    // 1-4: Reject invalid or unsigned requests
+    if (!signature || !timestamp || !publicKey) {
+      logger.warn('Rejected Discord interaction: missing signature, timestamp, or public key');
+      res.status(401).send('Invalid signature or missing verification headers');
+      return;
+    }
 
-  const isValid = verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
-  if (!isValid) {
-    logger.warn('Rejected Discord interaction: Ed25519 signature verification failed');
-    res.status(401).send('Invalid request signature');
-    return;
+    const isValid = verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
+
+    if (!isValid) {
+      logger.warn('Rejected Discord interaction: Ed25519 signature verification failed');
+      res.status(401).send('Invalid request signature');
+      return;
+    }
   }
 
   const interaction = req.body as DiscordInteractionBody;

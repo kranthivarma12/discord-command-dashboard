@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { eq, desc, sql, like, and, or } from 'drizzle-orm';
 import { getDb } from '../db/index.ts';
+import { handleDiscordInteractions } from '../discord/interactions.ts';
 import {
   admins,
   discordConfigs,
@@ -14,7 +15,7 @@ import { requireAuth, generateToken, maskSecret } from '../auth/index.ts';
 import { deliverMirrorNotification } from '../discord/mirror.ts';
 import { registerDiscordCommands } from '../discord/register-commands.ts';
 import { logger } from '../utils/logger.ts';
-
+import { randomUUID } from 'node:crypto';
 export const apiRouter = Router();
 
 // ==========================================
@@ -545,7 +546,117 @@ apiRouter.post('/config/test-mirror', requireAuth, async (req: Request, res: Res
 // ==========================================
 // DISCORD SLASH COMMAND REGISTRATION
 // ==========================================
+apiRouter.post('/discord/simulate', requireAuth, async (req, res) => {
+  const {
+    command,
+    text,
+    username = 'simulator_user',
+    userId = 'simulator-user-001',
+    channelId = 'simulator-channel-001',
+    guildId = 'simulator-guild-001',
+  } = req.body || {};
 
+  if (command !== 'status' && command !== 'report') {
+    res.status(400).json({
+      error: 'Invalid command. Supported commands are status and report.',
+    });
+    return;
+  }
+
+  if (command === 'report' && typeof text !== 'string') {
+    res.status(400).json({
+      error: 'Report text is required for the /report command.',
+    });
+    return;
+  }
+
+  const interactionId = `sim-${randomUUID()}`;
+
+  const syntheticInteraction = {
+    id: interactionId,
+    token: `sim-token-${randomUUID()}`,
+    type: 2,
+    application_id: process.env.DISCORD_APPLICATION_ID || 'simulator-application',
+    guild_id: guildId,
+    channel_id: channelId,
+    data: {
+      id: `sim-command-${command}`,
+      name: command,
+      options:
+        command === 'report'
+          ? [
+              {
+                name: 'text',
+                type: 3,
+                value: text,
+              },
+            ]
+          : [],
+    },
+    member: {
+      user: {
+        id: userId,
+        username,
+        global_name: username,
+      },
+    },
+  };
+
+  const mockRequest = {
+    headers: {},
+    body: syntheticInteraction,
+    rawBody: Buffer.from(JSON.stringify(syntheticInteraction)),
+  } as any;
+
+  let responsePayload: any = null;
+  let responseStatus = 200;
+
+  const mockResponse = {
+    status(code: number) {
+      responseStatus = code;
+      return this;
+    },
+
+    json(payload: any) {
+      responsePayload = payload;
+      return this;
+    },
+
+    send(payload: any) {
+      responsePayload = payload;
+      return this;
+    },
+  } as any;
+
+  const startedAt = Date.now();
+
+  await handleDiscordInteractions(
+    mockRequest,
+    mockResponse,
+    { skipSignatureVerification: true }
+  );
+
+  const executionTimeMs = Date.now() - startedAt;
+
+  if (responseStatus >= 400) {
+    res.status(responseStatus).json({
+      success: false,
+      interactionId,
+      response: responsePayload,
+      executionTimeMs,
+      mirrorTriggered: false,
+    });
+    return;
+  }
+
+  res.status(200).json({
+    success: true,
+    interactionId,
+    response: responsePayload,
+    executionTimeMs,
+    mirrorTriggered: command === 'report',
+  });
+});
 apiRouter.post('/discord/register', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   const db = await getDb();
   const configList = await db.select().from(discordConfigs).limit(1);

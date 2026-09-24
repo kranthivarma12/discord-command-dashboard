@@ -70,7 +70,9 @@ app.get('/api/health', healthHandler);
 
 // Public Discord Interactions Webhook Endpoint
 // Note: Must be reachable without admin authentication
-app.post('/api/discord/interactions', handleDiscordInteractions);
+ app.post('/api/discord/interactions', (req, res, next) => {
+  handleDiscordInteractions(req, res).catch(next);
+});
 
 // Admin API Routes
 app.use('/api', apiRouter);

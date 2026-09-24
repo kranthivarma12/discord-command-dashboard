@@ -82,44 +82,91 @@ export const api = {
   },
 
   // Overview & Metrics
-  async getOverview(): Promise<{
+async getOverview(): Promise<{
+  metrics: OverviewMetrics;
+  recentInteractions: InteractionLog[];
+  recentFailures: MirrorAttempt[];
+}> {
+  const response = await request<{
     metrics: OverviewMetrics;
-    recentInteractions: InteractionLog[];
-    recentFailures: MirrorAttempt[];
-  }> {
-    return request('/overview');
-  },
+    commandBreakdown: Record<string, {
+      total: number;
+      success: number;
+      failed: number;
+    }>;
+    recentActivity: InteractionLog[];
+    integrationStatus: {
+      configured: boolean;
+      guildConfigured: boolean;
+      channelConfigured: boolean;
+      mirrorConfigured: boolean;
+      mirrorEnabled: boolean;
+      mirrorType: string;
+    };
+  }>('/overview');
+
+  return {
+    metrics: response.metrics,
+    recentInteractions: response.recentActivity,
+    recentFailures: [],
+  };
+},
 
   // Interaction Logs
-  async getInteractionLogs(params: {
-    page?: number;
-    limit?: number;
-    command?: string;
-    status?: string;
-    search?: string;
-  } = {}): Promise<{
+ async getInteractionLogs(params: {
+  page?: number;
+  limit?: number;
+  command?: string;
+  status?: string;
+  search?: string;
+} = {}): Promise<{
+  logs: InteractionLog[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+}> {
+  const page = Math.max(params.page ?? 1, 1);
+  const limit = Math.max(params.limit ?? 15, 1);
+
+  const query = new URLSearchParams();
+  query.set('offset', String((page - 1) * limit));
+  query.set('limit', String(limit));
+
+  if (params.command) query.set('command', params.command);
+  if (params.status) query.set('status', params.status);
+  if (params.search) query.set('search', params.search);
+
+  const response = await request<{
+    total: number;
+    offset: number;
+    limit: number;
     logs: InteractionLog[];
+  }>(`/logs/interactions?${query.toString()}`);
+
+  return {
+    logs: response.logs,
     pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      pages: number;
-    };
-  }> {
-    const query = new URLSearchParams();
-    if (params.page) query.set('page', String(params.page));
-    if (params.limit) query.set('limit', String(params.limit));
-    if (params.command) query.set('command', params.command);
-    if (params.status) query.set('status', params.status);
-    if (params.search) query.set('search', params.search);
-
-    return request(`/logs/interactions?${query.toString()}`);
-  },
-
+      total: response.total,
+      page,
+      limit: response.limit,
+      pages: Math.max(1, Math.ceil(response.total / response.limit)),
+    },
+  };
+},
   // Failures & Dead-letter Queue
   async getFailures(): Promise<{ failures: MirrorAttempt[] }> {
-    return request('/logs/failures');
-  },
+  const response = await request<{
+    mirrorAttempts: MirrorAttempt[];
+    failedInteractions: unknown[];
+  }>('/failures');
+
+  return {
+    failures: response.mirrorAttempts,
+  };
+},
 
   async retryMirrorAttempt(attemptId: number): Promise<{ success: boolean; message: string; attempt: MirrorAttempt }> {
     return request(`/logs/failures/${attemptId}/retry`, {
@@ -134,7 +181,7 @@ export const api = {
 
   async updateDiscordConfig(config: Partial<DiscordConfig> & { botToken?: string; mirrorDestinationUrl?: string }): Promise<{ success: boolean; message: string }> {
     return request('/config/discord', {
-      method: 'PUT',
+      method: 'POST',
       body: JSON.stringify(config),
     });
   },
@@ -152,21 +199,39 @@ export const api = {
   },
 
   // Command Behavior Configuration
-  async getCommandConfigs(): Promise<{ configs: CommandConfig[] }> {
-    return request('/config/commands');
-  },
+ async getCommandConfigs(): Promise<{ configs: CommandConfig[] }> {
+  const response = await request<{
+    commands: CommandConfig[];
+  }>('/config/commands');
 
-  async updateCommandConfig(commandName: string, updates: Partial<CommandConfig>): Promise<{ success: boolean; config: CommandConfig }> {
-    return request(`/config/commands/${commandName}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  },
+  return {
+    configs: response.commands,
+  };
+},
+
+ async updateCommandConfig(
+  commandName: string,
+  updates: Partial<CommandConfig>
+): Promise<{ success: boolean; config: CommandConfig }> {
+  return request('/config/commands', {
+    method: 'POST',
+    body: JSON.stringify({
+      commandName,
+      ...updates,
+    }),
+  });
+},
 
   // Security Audit Logs
   async getActionLogs(): Promise<{ logs: ActionLog[] }> {
-    return request('/audit/actions');
-  },
+  const response = await request<{
+    actions: ActionLog[];
+  }>('/logs/actions');
+
+  return {
+    logs: response.actions,
+  };
+},
 
   // Interactive Simulator Endpoint
   async simulateInteraction(payload: {
