@@ -1,24 +1,63 @@
-services:
+ services:
   - type: web
     name: discord-interops-admin
     env: node
     plan: free
+
     buildCommand: npm install && npm run build
     startCommand: npm start
+
     envVars:
       - key: NODE_ENV
         value: production
+
       - key: PORT
         value: 10000
+
       - key: DATABASE_URL
-        sync: false # Connect your Neon.tech or Supabase connection string
-      - key: JWT_SECRET
+        sync: false
+
+      - key: APP_URL
+        sync: false
+
+      - key: SESSION_SECRET
         generateValue: true
+
+      - key: ADMIN_DEFAULT_USER
+        sync: false
+
+      - key: ADMIN_DEFAULT_PASSWORD
+        sync: false
+
+      - key: CLIENT_ORIGIN
+        sync: false
+
       - key: DISCORD_APPLICATION_ID
         sync: false
+
       - key: DISCORD_PUBLIC_KEY
         sync: false
+
       - key: DISCORD_BOT_TOKEN
         sync: false
+
+      - key: DISCORD_GUILD_ID
+        sync: false
+
+      - key: DISCORD_TARGET_CHANNEL_ID
+        sync: false
+
       - key: MIRROR_DESTINATION_URL
         sync: false
+
+      - key: MIRROR_DESTINATION_TYPE
+        value: discord_webhook
+
+      - key: MIRROR_ENABLED
+        value: "true"
+
+      - key: MIRROR_MAX_RETRIES
+        value: "3"
+
+      - key: MIRROR_RETRY_BACKOFF_MS
+        value: "1000"
