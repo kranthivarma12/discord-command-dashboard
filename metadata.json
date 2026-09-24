@@ -1,0 +1,6 @@
+{
+  "name": "Discord InterOps Admin",
+  "description": "Production Discord Interactions management system with live command logging, mirror delivery, and configurable bot behavior.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
