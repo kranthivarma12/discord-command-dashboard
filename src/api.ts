@@ -192,11 +192,11 @@ async getOverview(): Promise<{
     });
   },
 
-  async registerDiscordCommands(): Promise<{ success: boolean; message: string; data?: any }> {
-    return request('/config/discord/register-commands', {
-      method: 'POST',
-    });
-  },
+async registerDiscordCommands(): Promise<{ success: boolean; message: string; data?: any }> {
+  return request('/discord/register', {
+    method: 'POST',
+  });
+},
 
   // Command Behavior Configuration
  async getCommandConfigs(): Promise<{ configs: CommandConfig[] }> {
