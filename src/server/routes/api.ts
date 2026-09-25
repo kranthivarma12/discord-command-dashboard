@@ -228,10 +228,16 @@ apiRouter.get('/failures', requireAuth, async (_req: Request, res: Response): Pr
 
   // Retrieve failed mirror delivery attempts
   const failedAttempts = await db
-    .select()
-    .from(mirrorAttempts)
-    .orderBy(desc(mirrorAttempts.createdAt))
-    .limit(100);
+  .select()
+  .from(mirrorAttempts)
+  .where(
+    or(
+      eq(mirrorAttempts.status, 'failed'),
+      eq(mirrorAttempts.status, 'exhausted')
+    )
+  )
+  .orderBy(desc(mirrorAttempts.createdAt))
+  .limit(100);
 
   // Retrieve failed interaction logs
   const failedInteractions = await db
