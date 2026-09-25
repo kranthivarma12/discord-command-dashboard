@@ -101,7 +101,16 @@ apiRouter.get('/overview', requireAuth, async (_req: Request, res: Response): Pr
   const db = await getDb();
 
   // Aggregate counts
+  
   const allLogs = await db.select().from(interactionLogs);
+  const allMirrorAttempts = await db.select().from(mirrorAttempts);
+
+  const mirrorAttemptsCount = allMirrorAttempts.length;
+
+  const failedMirrorAttempts = allMirrorAttempts.filter(
+    attempt =>
+      attempt.status === 'failed' || attempt.status === 'exhausted'
+  ).length;
 
   const totalCommands = allLogs.length;
   const successfulCommands = allLogs.filter(l => l.processingStatus === 'completed').length;
@@ -141,12 +150,18 @@ apiRouter.get('/overview', requireAuth, async (_req: Request, res: Response): Pr
   };
 
   res.json({
-    metrics: {
+      metrics: {
       totalCommands,
-      successfulCommands,
+      completedCommands: successfulCommands,
       failedCommands,
-      duplicateCommands,
-      successRate: totalCommands > 0 ? Math.round((successfulCommands / totalCommands) * 100) : 100,
+      duplicateInteractions: duplicateCommands,
+      mirrorAttemptsCount,
+      failedMirrorAttempts,
+      activeGuildsCount: cfg?.guildId ? 1 : 0,
+      uptimeSeconds: Math.floor(process.uptime()),
+      successRate: totalCommands > 0
+        ? Math.round((successfulCommands / totalCommands) * 100)
+        : 100,
     },
     commandBreakdown,
     recentActivity,
